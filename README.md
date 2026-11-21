@@ -1,66 +1,130 @@
 # ComicsPuncher 漫画平台自动签到助手
 
-本项目是一个基于 Python 的自动化工具，旨在帮助用户实现 **哔咔漫画 (PicaComic)** 与 **禁漫天堂 (JMComic)** 的每日自动签到与打卡活跃。
+基于 **GitHub Actions** 的自动签到工具，每天自动为 **哔咔漫画（PicaComic）** 和 **禁漫天堂（JMComic）** 打卡活跃。
 
-## 🌟 功能特性
+- ✅ 无需自己的电脑或服务器，完全在 GitHub 云服务器上运行，关机也照常执行
+- ✅ 账号密码存放在 GitHub Secrets 中，不会写进代码
+- ✅ 每天自动运行一次，也支持手动触发
+- ✅ 禁漫接口域名由 `jmcomic` 自动更新，不用担心域名变动
 
-- **哔咔漫画**: 参考了[Golang版的哔咔漫画API](https://github.com/niuhuan/pica-go)，支持自动登录与每日打卡。
-- **禁漫天堂**: 基于 `jmcomic` 库，模拟移动端 API 交互，登录即自动完成活跃。
-- **多平台支持**: 适配 Windows/Linux 环境，支持配置 HTTP 代理。
-
-## 🚀 快速开始
-
-### 1. 环境准备
-
-确保你的系统中已安装 Python 3.8+。
-
-### 2. 安装依赖
-
-```bash
-pip install requests jmcomic
-```
-
-### 3. 账号配置
-在运行之前，请打开 `main.py`，在 `用户配置区` 修改以下信息：
-- `PICA_USER / PICA_PW`: 哔咔漫画账号密码。
-- `JM_USER / JM_PW`: 禁漫天堂账号密码。
-- `MY_PROXY`: **(重要)** 如果你在国内运行，请填写你的代理地址（如 `http://127.0.0.1:7897`），否则无法连接服务器。如果服务器在海外，请保持为空。
+> 本项目基于 [RahabHub/ComicsPuncher](https://github.com/RahabHub/ComicsPuncher) 改造，适配了 GitHub Actions 运行方式。
 
 ---
 
-1. **(可选) 任务计划**:
-如果你想每天自动跑，可以在 Windows “任务计划程序” 中创建一个基本任务，程序指向 `python.exe`，参数指向 `main.py` 的完整路径。
+## 工作原理
+
+`.github/workflows/punch.yml` 定义了一个定时任务：
+
+```yaml
+on:
+  schedule:
+    - cron: '55 13 * * *'   # UTC 时间 13:55 = 北京时间 21:55
+  workflow_dispatch:         # 支持在 Actions 页面手动触发
+```
+
+运行环境为 `ubuntu-latest`，每天**北京时间 21:55** 自动执行一次；也可随时手动运行。
+
+> 注：GitHub 定时任务在高峰期可能延迟几分钟到十几分钟，属正常现象。
 
 ---
 
-### 4. Linux 平台部署 (服务器挂机)
+## 使用步骤
 
-建议将脚本部署在海外 VPS（如腾讯云轻量香港、AWS、搬瓦工等），可省去代理配置。
+### 1. Fork 本仓库
 
-#### **Crontab 定时任务**
+点击右上角 **Fork**，把项目复制到你自己的 GitHub 账号下。
 
-1. **安装环境 (以 Ubuntu 为例)**:
+### 2. 配置账号密钥（Secret）
 
-```bash
-sudo apt update
-sudo apt install python3-pip
-pip3 install -r requirements.txt
+进入你 fork 的仓库：`Settings → Secrets and variables → Actions → New repository secret`
+
+新建一个名为 **`ACCOUNTS`** 的 Secret，Value 填写以下 JSON：
+
+```json
+[
+  {"type":"bika","username":"你的哔咔账号","password":"你的哔咔密码"},
+  {"type":"jinman","username":"你的禁漫账号","password":"你的禁漫密码"}
+]
 ```
 
-2. **设置定时任务**:
+> ⚠️ **键名 `type`、`username`、`password` 是固定的，必须原样保留，一个字都不能改！** 只需要替换引号里的账号和密码值。
+> - `type` 只能是 `bika`（哔咔）或 `jinman`（禁漫）
+> - 只用英文双引号 `"`、英文逗号 `,`
+> - 不需要的平台可以删掉对应那一行
+> - 哔咔通常用**邮箱**登录；禁漫用用户名
 
-输入 `crontab -e`，在文件末尾添加以下行：
+### 3.（可选）配置代理
+
+如果某平台在你的网络环境下连不上，可以再加一个 Secret：
+
+- Name：`HTTPS_PROXY`
+- Value：代理地址，如 `http://127.0.0.1:7890` 或 `http://user:pass@host:port`
+
+不需要代理就不用建这个 Secret，留空即可。
+
+### 4. 启用 Actions 并测试
+
+打开仓库的 **Actions** 标签页，若提示则点击启用工作流（"I understand my workflows, go ahead and enable them"）。
+
+然后手动测试一次：
+
+**Actions → Comic Punch → Run workflow → 选择分支 `main` → Run workflow**
+
+等运行结束，点进日志查看签到结果。看到类似下面的输出就说明成功：
+
+```
+哔咔登录成功
+哔咔签到成功！结果: ok
+禁漫登录活跃成功！
+金币余额: 6320
+```
+
+测试成功后，之后每天就会自动签到，无需手动操作。
+
+---
+
+## 常见问题（FAQ）
+
+**Q: 日志显示 `email is not allowed to be empty` / `用戶名和密碼字段不能留空！`**
+
+A: 说明账号没读出来。检查 `ACCOUNTS` 里的键名是否写成了 `username` / `password`（不要写成 `user`/`pwd`/你的用户名等）。本项目的日志会打印脱敏诊断信息，可直接看键名是否正确。
+
+**Q: 哔咔登录失败 `{'code': 400, ...}`**
+
+A: 检查账号密码是否正确（哔咔一般用邮箱），或签名算法是否需要更新。
+
+**Q: 禁漫提示域名无法连接**
+
+A: `jmcomic` 会自动获取最新 API 域名；若仍失败，通常是网络环境问题，可尝试配置 `HTTPS_PROXY`。
+
+**Q: 定时任务不跑了**
+
+A: GitHub 对个人仓库长期无活动（约 60 天）会自动暂停定时任务，偶尔手动跑一次或提交一次改动即可保活。
+
+---
+
+## 本地运行（可选）
+
+如果想在自己电脑上跑：
+
 ```bash
-# 每天凌晨 08:30 自动执行打卡并记录日志
-30 8 * * * /usr/bin/python3 /root/ComicsPuncher/main.py >> /root/ComicsPuncher/log.txt 2>&1
+pip install -r requirements.txt
+```
+
+然后设置环境变量 `ACCOUNTS`（JSON，格式同上），再执行：
+
+```bash
+python main.py
 ```
 
 ---
 
-### 4. 常见问题 (FAQ)
-* Q: 哔咔登录报错 `ERROR - 登录失败: {'code': 400, ...}`
-  * A: 通常是签名密钥过期或代理失效。本项目已同步最新的签名算法。
+## 依赖
 
+- Python 3.10+（GitHub Actions 使用 3.13）
+- `requests`
+- `jmcomic`
 
-* Q: 禁漫天堂域名无法连接？
-  * A: 脚本会自动通过官方 API 更新最新域名，请确保你的网络能够访问 JM 的分流服务器。
+## 免责声明
+
+本工具仅用于个人账号的每日签到打卡，请遵守各平台的相关规定。账号密码仅通过 GitHub Secrets 传递，不会明文出现在代码中。
