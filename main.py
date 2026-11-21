@@ -20,34 +20,65 @@ def normalize_proxy(value):
     return value
 
 
+USER_KEYS = ("username", "user", "email", "account", "name", "用户名", "账号", "邮箱")
+PASSWORD_KEYS = ("password", "pwd", "pass", "pw", "密码")
+
+
+def pick(item, keys):
+    for key in keys:
+        value = item.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
 def load_accounts():
-    """兼容两种 ACCOUNTS 格式：
-    1) 旧项目的 JSON: [{"type":"bika","username":"u","password":"p"}, ...]
-    2) 新项目的格式: u1,p1|u2,p2 （两个平台共用）
-    """
+    """兼容多种 ACCOUNTS 写法，并输出脱敏诊断信息。"""
     raw = os.environ.get("ACCOUNTS", "").strip()
     if not raw:
         raise SystemExit("未配置 ACCOUNTS 环境变量，请检查仓库 Secret")
 
+    logging.info("ACCOUNTS 原始长度: %d，首字符: %s", len(raw), raw[:1])
+
     if raw.startswith("["):
+        try:
+            items = json.loads(raw)
+        except Exception as e:
+            raise SystemExit(f"ACCOUNTS 不是合法 JSON: {e}")
+
         accounts = []
-        for item in json.loads(raw):
+        for index, item in enumerate(items, 1):
+            if not isinstance(item, dict):
+                logging.error("第 %d 项不是对象，已跳过: %s", index, type(item).__name__)
+                continue
+            username = pick(item, USER_KEYS)
+            password = pick(item, PASSWORD_KEYS)
+            logging.info(
+                "账号项 %d 键名=%s | 类型=%s | 用户名非空=%s | 密码非空=%s",
+                index,
+                list(item.keys()),
+                item.get("type", "both"),
+                bool(username),
+                bool(password),
+            )
             accounts.append(
                 (
                     str(item.get("type", "both")).lower(),
-                    str(item.get("username", "")),
-                    str(item.get("password", "")),
+                    username,
+                    password,
                 )
             )
         return accounts
 
+    normalized = raw.replace("，", ",").replace("｜", "|").replace("│", "|")
     accounts = []
-    for part in raw.split("|"):
+    for part in normalized.split("|"):
         part = part.strip()
         if not part or "," not in part:
             continue
         username, password = part.split(",", 1)
         accounts.append(("both", username.strip(), password.strip()))
+    logging.info("按管道格式解析出 %d 个账号", len(accounts))
     return accounts
 
 
