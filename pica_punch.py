@@ -1,14 +1,13 @@
-import time
-import hmac
 import hashlib
-import requests
+import hmac
 import logging
+import time
+
+import requests
 
 
 class PicaPuncher:
-    """
-    哔咔漫画自动签到类
-    """
+    """哔咔漫画自动签到类"""
 
     API_URL = "https://picaapi.picacomic.com"
     SECRET_KEY = r"~d}$Q7$eIni=V)9\RK/P.RM4;9[7|@/CA}b~OW!3?EV`:<>M7pddUBL5n|0/*Cn"
@@ -21,21 +20,18 @@ class PicaPuncher:
 
     def _get_headers(self, path, method, token=None):
         """构建哔咔特有的加密请求头"""
-        nonce = "b1ab87b4800d4d4590a11701b8551afa"  # 固定随机数
+        nonce = "b1ab87b4800d4d4590a11701b8551afa"
         ts = str(int(time.time()))
-
-        # 签名算法: url路径 + 时间戳 + 随机数 + 请求方式 + API_KEY
         raw = (path + ts + nonce + method + self.API_KEY).lower()
         signature = hmac.new(
             self.SECRET_KEY.encode(), raw.encode(), hashlib.sha256
         ).hexdigest()
-
         headers = {
             "api-key": self.API_KEY,
             "signature": signature,
             "time": ts,
             "nonce": nonce,
-            "app-channel": "2",  # 分流通道
+            "app-channel": "2",
             "app-version": "2.2.1.2.3.3",
             "app-uuid": "defaultUuid",
             "app-platform": "android",
@@ -49,9 +45,7 @@ class PicaPuncher:
         return headers
 
     def run(self):
-        """执行全流程：登录 -> 签到"""
         try:
-            # 1. 登录
             login_path = "auth/sign-in"
             res = requests.post(
                 f"{self.API_URL}/{login_path}",
@@ -60,16 +54,13 @@ class PicaPuncher:
                 proxies=self.proxies,
                 timeout=20,
             )
-
             login_data = res.json()
             if res.status_code != 200 or login_data.get("message") != "success":
-                logging.error(f"哔咔登录失败: {login_data}")
+                logging.error("哔咔登录失败: %s", login_data)
                 return
-
             token = login_data["data"]["token"]
             logging.info("哔咔登录成功")
 
-            # 2. 签到
             punch_path = "users/punch-in"
             res = requests.post(
                 f"{self.API_URL}/{punch_path}",
@@ -77,14 +68,13 @@ class PicaPuncher:
                 proxies=self.proxies,
                 timeout=20,
             )
-
             punch_data = res.json()
             if punch_data.get("message") == "success":
                 logging.info(
-                    f"哔咔签到成功！结果: {punch_data['data']['res']['status']}"
+                    "哔咔签到成功！结果: %s",
+                    punch_data["data"]["res"]["status"],
                 )
             else:
-                logging.warning(f"哔咔签到反馈: {punch_data.get('message')}")
-
+                logging.warning("哔咔签到反馈: %s", punch_data.get("message"))
         except Exception as e:
-            logging.error(f"哔咔运行异常: {e}")
+            logging.error("哔咔运行异常: %s", e)
