@@ -2,7 +2,7 @@ name: Comic Punch
 
 on:
   schedule:
-    - cron: '55 13 * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
